@@ -4,7 +4,8 @@ import Google from "next-auth/providers/google"
 import Credentials from "next-auth/providers/credentials"
 import { signInSchema } from "./lib/zod"
 import { PrismaAdapter } from "@auth/prisma-adapter"
-import  prisma  from "./lib/prisma"
+import  prisma  from "@/lib/prisma"
+import bcrypt from 'bcrypt';
 export const { auth, handlers, signIn, signOut } = NextAuth({
     adapter: PrismaAdapter(prisma),
 
@@ -25,28 +26,47 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
       },
       async authorize(credentials) {
         try {
-            let user = null
         const { email, password } = await signInSchema.parseAsync(credentials)
 
-        // logic to salt and hash password
-        //const pwHash = saltAndHashPassword(credentials.password)
- 
-        // logic to verify if the user exists
-        //user = await getUserFromDb(credentials.email, pwHash)
- 
-        if (!user) {
-          // No user found, so this is their first attempt to login
-          // Optionally, this is also the place you could do a user registration
-          throw new Error("Invalid credentials.")
+        const user = await prisma.user.findFirst({
+            where:{
+              email
+            }
+        })
+
+         if (!user || !user.password) {
+           if (!user) throw new Error("User not found")
+          if (!user?.password) throw new Error("User exists but password doesn't, try signing in with google/github") 
         }
- 
+        const isPasswordValid= await bcrypt.compare(password, user.password as string)
+        if (!isPasswordValid) {
+          throw new Error("Wrong Password, impersonator!")
+        }
         // return user object with their profile data
-        return user
+        return {
+          id:user.id.toString(),
+          email:user.email
+        }
         } catch (error) {
-           return  null 
+           return  null
         }
         
       },
     }),
   ],
+  callbacks:{
+
+    async session({session, token}) {
+      if (token) {
+        session.user.id = token.id as string
+      }
+      return session
+    },
+    async jwt({token, user}) {
+      if (user) {
+        token.id = user.id
+      }
+      return token
+    }
+  }
 })
