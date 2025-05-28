@@ -7,8 +7,8 @@ import { PrismaAdapter } from "@auth/prisma-adapter"
 import  prisma  from "@/lib/prisma"
 import bcrypt from 'bcrypt';
 export const { auth, handlers, signIn, signOut } = NextAuth({
-    adapter: PrismaAdapter(prisma),
-
+    
+  adapter: PrismaAdapter(prisma),
   providers: [GitHub, 
     Google,
     Credentials({
@@ -34,9 +34,9 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
             }
         })
 
-         if (!user || !user.password) {
+         if (!user || !user.password) {//these custom errors will be lost as the nextauth will give the generic signin errors
            if (!user) throw new Error("User not found")
-          if (!user?.password) throw new Error("User exists but password doesn't, try signing in with google/github") 
+          if (!user?.password) throw new Error("User exists but password doesn't, try signing in with google/github")  // when signup happened from some oAuth but signin from custom
         }
         const isPasswordValid= await bcrypt.compare(password, user.password as string)
         if (!isPasswordValid) {
@@ -45,7 +45,8 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         // return user object with their profile data
         return {
           id:user.id.toString(),
-          email:user.email
+          email:user.email,
+          name: user.name
         }
         } catch (error) {
            return  null
@@ -59,12 +60,14 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     async session({session, token}) {
       if (token) {
         session.user.id = token.id as string
+        session.user.name = token.name
       }
       return session
     },
     async jwt({token, user}) {
       if (user) {
         token.id = user.id
+        token.username = user.name
       }
       return token
     }
